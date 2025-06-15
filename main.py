@@ -1,43 +1,50 @@
 
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
-import re
+import os
+from telegram import Update, InputMediaPhoto, InputMediaVideo, InputMediaDocument
+from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
 
-BOT_TOKEN = "8168574937:AAEEMmYUHK_wietmfyNv9DQRRrJ0K8NgI5k"
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8168574937:AAEEMmYUHK_wietmfyNv9DQRRrJ0K8NgI5k")
 CHANNEL_ID = "@tabrizchannel"
-SIGNATURE = "\n\n🔗 @tabrizchannel"
+SIGNATURE = "🔗 @tabrizchannel"
 
+# حذف هر کلمه که با @ شروع میشه از متن
 def clean_caption(caption):
     if not caption:
-        return ""
-    return re.sub(r"@\w+", "", caption)
+        return SIGNATURE
+    words = caption.split()
+    cleaned = [w for w in words if not w.startswith("@")]
+    return " ".join(cleaned) + "\n\n" + SIGNATURE
 
-async def forward_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
+async def handle_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message:
+        msg = update.message
 
-    try:
+        # حذف فورواردر
+        if msg.forward_from_chat or msg.forward_from:
+            msg.forward_from_chat = None
+            msg.forward_from = None
+
         if msg.text:
-            clean_text = re.sub(r"@\w+", "", msg.text).strip()
-            await context.bot.send_message(chat_id=CHANNEL_ID, text=clean_text + SIGNATURE)
-        elif msg.caption and msg.photo:
-            clean = clean_caption(msg.caption).strip()
-            await context.bot.send_photo(chat_id=CHANNEL_ID, photo=msg.photo[-1].file_id, caption=clean + SIGNATURE)
-        elif msg.caption and msg.video:
-            clean = clean_caption(msg.caption).strip()
-            await context.bot.send_video(chat_id=CHANNEL_ID, video=msg.video.file_id, caption=clean + SIGNATURE)
-        elif msg.document:
-            clean = clean_caption(msg.caption).strip()
-            await context.bot.send_document(chat_id=CHANNEL_ID, document=msg.document.file_id, caption=clean + SIGNATURE)
-        elif msg.voice:
-            await context.bot.send_voice(chat_id=CHANNEL_ID, voice=msg.voice.file_id)
-        elif msg.audio:
-            await context.bot.send_audio(chat_id=CHANNEL_ID, audio=msg.audio.file_id, caption=clean_caption(msg.caption) + SIGNATURE)
-    except Exception as e:
-        print("Error:", e)
+            text = clean_caption(msg.text)
+            await context.bot.send_message(chat_id=CHANNEL_ID, text=text)
 
-if __name__ == "__main__":
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    handler = MessageHandler(filters.ALL, forward_message)
-    app.add_handler(handler)
-    print("Bot started...")
-    app.run_polling()
+        elif msg.photo:
+            caption = clean_caption(msg.caption)
+            await context.bot.send_photo(chat_id=CHANNEL_ID, photo=msg.photo[-1].file_id, caption=caption)
+
+        elif msg.video:
+            caption = clean_caption(msg.caption)
+            await context.bot.send_video(chat_id=CHANNEL_ID, video=msg.video.file_id, caption=caption)
+
+        elif msg.document:
+            caption = clean_caption(msg.caption)
+            await context.bot.send_document(chat_id=CHANNEL_ID, document=msg.document.file_id, caption=caption)
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("ربات آنلاین است ✅")
+
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.ALL, handle_all))
+
+app.run_polling()
